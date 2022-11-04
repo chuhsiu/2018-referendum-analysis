@@ -1,5 +1,5 @@
 ############ 整合 V_ID ###############
-load("data/RiTW108.rdata")
+load("data/RiTW108_A10.rdata")
 
 a10_6 = dplyr::rename(Age10, V_ID = 村里代碼) %>% 
   filter(縣市名稱 %in% town6, !is.na(V_ID), year==108) %>% 

@@ -13,7 +13,8 @@ pacman::p_load(shinyWidgets,shinythemes,flexdashboard)
 pacman::p_load(stringr,ggbiplot,psych,heatmaply,dplyr,plotly)
 library(sf)
 library(tmap)
-load("data/GeoTW108.rdata")
+load("data/twTown.rdata")
+load("data/twVill.rdata")
 load("refData.rdata")
 st_crs(twTown) = 3826; st_crs(twVill) = 3826 
 D = df_town
