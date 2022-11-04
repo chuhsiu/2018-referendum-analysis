@@ -1,0 +1,62 @@
+---
+title: "探索 - 公投與人口統計資料"
+author: " <span style='font-size:70%;'>鄭竹秀<span> "
+output: 
+  flexdashboard::flex_dashboard:
+    social: menu
+    source_code: embed 
+    orientation: columns
+runtime: shiny
+---
+
+```{r results='hide', message=FALSE, warning=FALSE, echo=F}
+pacman::p_load(shiny,shinyWidgets,shinythemes,DT)
+pacman::p_load(dplyr, stringr, ggplot2, plotly, GGally, FactoMineR,factoextra,heatmaply)
+
+load("refData.rdata")
+
+town = df_town[,-c(37:46)]
+town$原住民人口比 = log(town$原住民人口比)
+s = names(town)[-c(1,2,27:36)]
+r = names(town)[c(27:36)]
+```
+
+
+Sidebar {.sidebar data-width=280}
+-------------------------------------
+### Input
+```{r}
+# dropdown(
+  selectInput(inputId="Op",NULL,
+            s,c("人口密度","教育程度(碩博)","人均收入"),
+            multiple=T)
+
+  selectInput(inputId="Ref",NULL,r,c("第七案"),multiple=T)
+  
+  actionButton("go","開始")
+  #   
+  # style = "simple", icon = icon("bars"),
+  # status = "primary", width = "320px")
+
+df = eventReactive( input$go, {
+    list(df_town=town, op=input$Op, ref=input$Ref)} )
+
+```
+
+Column {.tabset data-width=70%}
+-------------------------------------
+### 🌷 成對變數矩陣
+
+```{r}
+renderPlotly({
+  df_town = df()$df_town;op=df()$op;ref=df()$ref
+highlight_key(df_town) %>% 
+  ggpairs(
+    columns = c(which(colnames(df_town) %in% op),which(colnames(df_town) %in% ref),1), mapping = aes(color=county,label=town),
+    # lower = list(continuous=wrap("smooth",size=0.5,se=F)), 
+    diag = list(continuous=wrap("densityDiag", alpha = 0.7, col='gray')) 
+  ) %>% 
+  ggplotly() %>% 
+  highlight("plotly_selected")
+})
+```

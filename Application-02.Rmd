@@ -1,0 +1,225 @@
+---
+title: "2018公投同意率(六都間比較)"
+author: " <span style='font-size:70%;'>鄭竹秀<span> "
+output: 
+  flexdashboard::flex_dashboard:
+    social: menu
+    orientation: columns
+runtime: shiny
+---
+
+```{r global, include=F, message=F, warning=F}
+pacman::p_load(shinyWidgets,shinythemes,flexdashboard)
+pacman::p_load(stringr,ggbiplot,psych,heatmaply,dplyr,plotly)
+library(sf)
+library(tmap)
+load("data/GeoTW108.rdata")
+load("refData.rdata")
+st_crs(twTown) = 3826; st_crs(twVill) = 3826 
+D = df_town
+D = inner_join(select(twTown, county=COUNTY, town=TOWN), D)
+
+# adjust for the far away offshore islands 
+gx = subset(twVill, TOWN=="旗津區") %>% st_geometry %>% 
+  st_union %>% st_cast("MULTIPOLYGON")
+D$geometry[D$town=="旗津區"] = gx
+
+m6 = unique(D$county)
+refs = names(D)[27:36]
+vote = names(D)[37:46]
+D = subset(D, county%in%m6) 
+D = mutate_at(D, vars(27:36), round, 1)
+D$key = 1:nrow(D)
+c6 = group_by(D[,c(1:2)],county) %>% dplyr::summarise(n = n()) 
+
+tmapRef = function(z,x) {
+  tips = paste0(str_remove(D$town,"區"), pull(D,z))
+   D %>% mutate(tips = tips, empty=" ") %>% 
+    tm_shape(name=z) + tm_polygons(
+      col=z, title=sprintf("%s(%%)",x), alpha=0.90, 
+      palette="RdYlGn", border.col='lightgray',
+      popup.vars=c("同意/投票(%)"="empty"), id="tips" ) + 
+    tm_shape(c6,name="縣市") + tm_borders(col='gray50') +
+    tm_view(control.position=c("left","bottom"),
+            view.legend.position=c("right","bottom"),
+            leaflet.options=list(zoomControl=F)) + 
+    tmap_options(check.and.fix = TRUE)
+}
+```
+
+**主成分分析** {data-icon="fa-chess-knight"}
+===========================================================
+Col-1 {data-width=65%}
+-----------------------------------------------------------
+### Principle Component Analysis
+```{r message=F, warning=F}
+renderPlotly({
+  prc <- D[,27:36] %>% st_drop_geometry %>% prcomp(scale=TRUE)
+  gg = ggbiplot(pcobj=prc, alpha=0) + 
+    geom_point(aes(color=D$county, label=D$town, key=D$key), 
+               alpha=0.8, shape=21, stroke=0.8) + 
+   annotate("text",x=-2,y=1,label="環境與食安",size=5,alpha=0.3) +
+   annotate("text",x=2,y=1,label="支持性別平權",size=5,alpha=0.3) +
+   annotate("text",x=2,y=-1,label="東奧正名",size=5,alpha=0.3) +
+   annotate("text",x=-2,y=-1,label="反對性別平權",size=5,alpha=0.3) +
+    labs(color="") + theme_bw() +
+    scale_color_brewer(palette="Dark2") 
+  ggplotly(gg) %>% config(scrollZoom=TRUE) %>% layout(
+    legend=list(x=0.02, y=0.98), dragmode="pan")
+  })
+
+Keys = eventReactive(event_data("plotly_selected"), {
+  k = event_data("plotly_selected")$key %>% as.integer
+  k[!is.na(k)]
+})
+
+
+```
+
+Col-2 {data-width=35% .tabset}
+-----------------------------------------------------------
+### 地理位置
+
+<div style="height:2%">
+<h6>🌞 選擇左圖資料點可以看到相對應的地理位置</h6>
+</div>
+
+<div style="height:92%">
+```{r}
+renderTmap({
+ # Debug : k = c(13,61,62,63,120)
+  tm_shape(c6,name="縣市") + tm_borders(col='gray50') +
+  tm_shape(D[Keys(),], name="selected") +
+  # Debug : tm_shape(D[k,], name="selected") +
+    tm_polygons(
+      col="county", title="selected", alpha=0.90, 
+      border.col='lightgray', id="town", palette = "Dark2",
+      legend.show=F) +
+    tm_view(control.position=c("left","bottom"),
+            leaflet.options=list(zoomControl=F)) +
+     tmap_options(check.and.fix = TRUE)
+  })
+```
+</div>
+
+### 整體
+十大公投案一共被分成了四大方向，<span style="color:red;">07反火力發電</span>、<span style="color:red;">08反燃煤電廠</span>、<span style="color:red;">09反核食進口</span>與<span style="color:red;">16以核養綠</span>等環境與食安議題；與其議題在對立面的是<span style="color:#33C0FF;">13的東奧正名</span>。
+
+會產生這樣的可能是因為在環境與食安議題是由國民黨員所發起；而東奧正名則多支持者為民進黨。
+
+
+在性別平權公投議題上，很明顯的，<span style="color:red;">14、15挺同婚與性平教育</span>和與護家盟發起的<span style="color:#33C0FF;">10反民法同婚</span>、<span style="color:#33C0FF;">11反同志教育</span>、<span style="color:#33C0FF;">12同婚另立專法</span>等公投案是對立的方向。
+
+### 臺北
+從台北市同意率與公投案的關係，整體是偏向<span style="color:red;">14、15挺同婚與性平教育</span>。
+
+有的區比較<span style="color:#33C0FF;">支持環境與食安</span>的議題，如：<span style="background-color:yellow;">文山、信義、內湖、南港等偏向市中心</span>的區域。
+比較偏<span style="color:#33C0FF;">支持13東奧正名</span>的則是<span style="background-color:yellow;">大同、士林</span>這兩區。
+
+### 新北
+新北市的分佈不像台北市，有個很集中的趨勢。不過還是可以看出，集中的趨勢一樣偏向支持<span style="color:red;">「同婚與教育」</span>跟<span style="color:red;">「環境與食安」</span>這幾項公投案。
+
+<span style="background-color:yellow;">平溪、坪林、萬里、雙溪</span>這些地方則比較支持<span style="color:#33C0FF;">民婚一男一女與反性平教育</span>。
+
+<span style="background-color:yellow;">平溪、石碇與貢寮</span>比較支持<span style="color:#33C0FF;">東奧正名</span>的地區，也集中在新北市的<span style="background-color:yellow;">東部</span>。
+
+### 桃園
+桃園的分佈主要篇<span style="color:red;">支持「環境與食安」</span>的議題，尤其在<span style="background-color:yellow;">中壢、平鎮、楊梅與龍潭</span>這四個集中地區最為明顯。
+
+<span style="color:#33C0FF;">同婚與教育</span>支持度最高的地方在<span style="background-color:yellow;">東邊的桃園與龜山</span>，支持度最低的是在<span style="background-color:yellow;">南邊的復興區</span>。
+
+### 臺中
+臺中市整體支持<span style="color:red;">「環境與食安」</span>的議題偏高，與桃園相似。
+
+<span style="color:#33C0FF;">不支持性平議題</span>的，主要<span style="background-color:yellow;">以東邊的東勢、新社與和平區</span>為主。
+
+<span style="color:#33C0FF;">支持東奧正名</span>的地區以<span style="background-color:yellow;">臺中市中區</span>較為明顯一點。
+
+### 臺南
+到臺南的分佈與北部相差很多，地區集中<span style="color:red;">支持13東奧正名</span>該案。
+
+性平議題則是一半一半，在<span style="background-color:yellow;">市中心</span>的區域<span style="color:#33C0FF;">支持性平婚姻</span>的比例較高，如：安平、東區、新營、永康。
+
+其他<span style="background-color:yellow;">山區或沿海地</span>區則比較偏向<span style="color:#33C0FF;">反對同婚</span>的公投案。
+
+### 高雄
+高雄明顯在<span style="color:red;">同婚的議題上是持反對意見的</span>，尤其在<span style="background-color:yellow;">山區</span>更為明顯（茂林、桃源、那瑪夏）。
+
+有的地區明顯<span style="color:#33C0FF;">支持東奧正名</span>，一部分集中在高雄<span style="background-color:yellow;">西邊</span>與<span style="background-color:yellow;">市區</span>；
+
+<span style="background-color:yellow;">北高雄</span>則是環境議題與正名議題<span style="color:#33C0FF;">支持地區各半</span>。
+
+**相關矩陣** {data-icon="fa-table"}
+===========================================================
+### 
+```{r}
+l = names(df_town)[-c(1,2,37:48)]
+dropdown(
+    selectInput(inputId="s1",NULL,l,l,multiple=T),
+    style = "simple", icon = icon("bars"),
+    status = "primary", width = "320px"
+)
+```
+
+```{r}
+renderPlotly(
+cor(df_town[,input$s1]) %>% heatmaply_cor()
+)
+```
+
+**同意率比較** {data-icon="fa-balance-scale"}
+===========================================================
+Column 1
+-----------------------------------------------------------
+<div style="height:30pt">
+```{r}
+selectInput(inputId="ref1",NULL,refs,'07反火力發電')
+```
+</div>
+
+###
+```{r}
+renderTmap({ tmapRef(input$ref1,"同意") })
+```
+
+Column 2
+-----------------------------------------------------------
+<div style="height:30pt">
+```{r}
+selectInput(inputId="ref2",NULL,refs,'16以核養綠')
+```
+</div>
+
+###
+```{r}
+renderTmap({ tmapRef(input$ref2,"同意") })
+```
+
+**投票率比較** {data-icon="fa-balance-scale"}
+===========================================================
+ Column 1
+-----------------------------------------------------------
+<div style="height:30pt">
+```{r}
+selectInput(inputId="ref3",NULL,vote,'v07_反火力發電')
+```
+</div>
+
+###
+```{r}
+renderTmap({ tmapRef(input$ref3,"投票") })
+```
+
+Column 2
+-----------------------------------------------------------
+<div style="height:30pt"> 
+```{r}
+selectInput(inputId="ref4",NULL,vote,'v16_以核養綠')
+```
+ </div>
+
+###
+```{r}
+renderTmap({ tmapRef(input$ref4,"投票") })
+```
+ 
